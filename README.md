@@ -20,7 +20,7 @@ TurismChatbot has been trained with multiple datasets and corpora, using input f
 Before you can use the TurismChatbot, you need to clone the repository and install the necessary dependencies. 
 
 ```bash
-git clone https://github.com/ChristianRomeo/TurismChatbot.git
+git clone https://github.com/ChristianRomeo/Chatbot.git
 cd TurismChatbot
 ```
 
