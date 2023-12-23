@@ -1,9 +1,5 @@
 streamlit
 openai
-pinecone-client
 langchain
-datasets
 transformers
-tiktoken
-pandas
-pinecone-client[grpc]
+llama_index
