@@ -1,18 +1,12 @@
 import glob
 import os
-import shutil
 from llama_index import Prompt, VectorStoreIndex, ServiceContext, Document, StorageContext, load_index_from_storage
 from llama_index.llms import OpenAI
 import pandas as pd
-import pinecone
 from llama_index import VectorStoreIndex, StorageContext
-from llama_index.vector_stores import PineconeVectorStore
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from llama_index.embeddings import LangchainEmbedding
-import dask.dataframe as dd
-import cohere
 from llama_index.vector_stores import AstraDBVectorStore
-from sentence_transformers import SentenceTransformer
 
 #OptimumEmbedding.create_and_save_optimum_model("dangvantuan/sentence-camembert-large", "./bge_onnx")
 
@@ -29,22 +23,18 @@ qa_template = Prompt((
     "---------------------\n"
     "{context_str}"
     "\n---------------------\n"
-    "Given this information, please answer the question and each answer should start with code word AI Demos: {query_str}\n"
+    "Given this information, please answer the question and each answer should start with code word TourismBot: {query_str}\n"
 ))
 
-cohere_api_key = os.environ.get('COHERE_API_KEY')
-cohere_api_key = os.environ.get('COHERE_API_KEY')
+
 astra_api_key = os.environ.get("ASTRA_API_KEY")
-co = cohere.Client(str(cohere_api_key))
-voyage_api_key= os.environ.get('VOYAGE_API_KEY')
 
 astra_db_store = AstraDBVectorStore(
     token=str(astra_api_key),
     api_endpoint="https://9cebec1d-fe4a-40f7-8649-56b4b64fe1f5-us-east1.apps.astra.datastax.com",
-    collection_name="tourism1",
+    collection_name="tourism2",
     embedding_dimension=1024,
 )
-
 
 service_context = ServiceContext.from_defaults(llm=OpenAI(model="gpt-3.5-turbo-1106", temperature=0.6, system_prompt=system_prompt), 
                                                embed_model=LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', model_kwargs = {'device': 'cuda:0'})))    
@@ -74,18 +64,16 @@ if "y"==input("Do you want to recompute the index? (y/n)"):
         # Add the documents to the list
         documents.extend(docs)
 
-    #index = VectorStoreIndex.from_documents(documents, service_context=service_context, storage_context=storage_context, show_progress=True)
-    batch_size = 5461  # Maximum batch size
-    for i in range(0, len(documents), batch_size):
-        batch = documents[i:i+batch_size]
-        # Now add the batch to the index
-        index = VectorStoreIndex.from_documents(batch, service_context=service_context, storage_context=storage_context, show_progress=True, use_async=True)
-    #storage_context.persist(persist_dir=f"./storage")
-
+    index = VectorStoreIndex.from_documents(documents, service_context=service_context, storage_context=storage_context, show_progress=True)
 else:
-    index = load_index_from_storage(StorageContext.from_defaults(persist_dir=f"./storage"), service_context=service_context)
+    index = VectorStoreIndex.from_vector_store(vector_store=astra_db_store, service_context=service_context) 
+    #load_index_from_storage(StorageContext.from_defaults(persist_dir=f"./storage"), service_context=service_context)
 
+while True:
+    # Read a line of input from the user
+    question = input("Please enter your question: ")
+    if question == "exit":
+            break
+    print(index.as_query_engine(verbose=True).query(question))
 
-print(index.as_chat_engine(verbose=True).chat(input("Please enter your question: ")).response)
-
-#print(index.as_query_engine(text_qa_template=qa_template).query(input("Please enter your question: ")))
+print("Goodbye!")
