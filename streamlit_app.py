@@ -28,8 +28,7 @@ astra_db_store = AstraDBVectorStore(
 )
 
 # Set up the model and embedding
-service_context = ServiceContext.from_defaults(llm=OpenAI(model="gpt-3.5-turbo-1106", temperature=0.6, system_prompt=system_prompt), 
-                                               embed_model=LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large')))
+service_context = ServiceContext.from_defaults(llm=OpenAI(model="gpt-3.5-turbo-1106", temperature=0.6, system_prompt=system_prompt))
  
 storage_context = StorageContext.from_defaults(vector_store=astra_db_store)
 index = VectorStoreIndex.from_vector_store(vector_store=astra_db_store, service_context=service_context) 
