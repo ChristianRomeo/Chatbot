@@ -4,3 +4,4 @@ langchain
 transformers
 llama-index
 astrapy
+sentence-transformers
