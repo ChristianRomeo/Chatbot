@@ -3,3 +3,4 @@ openai
 langchain
 transformers
 llama-index
+astrapy
