@@ -1,14 +1,14 @@
 import glob
 import os
-from llama_index import Prompt, VectorStoreIndex, ServiceContext, Document, StorageContext, load_index_from_storage
+from llama_index import Prompt, VectorStoreIndex, ServiceContext, Document, StorageContext
 from llama_index.llms import OpenAI
 import pandas as pd
 from llama_index import VectorStoreIndex, StorageContext
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
 from llama_index.embeddings import LangchainEmbedding
 from llama_index.vector_stores import AstraDBVectorStore
+from langchain.llms import OpenAI
 
-#OptimumEmbedding.create_and_save_optimum_model("dangvantuan/sentence-camembert-large", "./bge_onnx")
 
 system_prompt = (
     "This is a knowledgeable Tourism Assistant designed to provide visitors with "
@@ -32,20 +32,15 @@ astra_api_key = os.environ.get("ASTRA_API_KEY")
 astra_db_store = AstraDBVectorStore(
     token=str(astra_api_key),
     api_endpoint="https://9cebec1d-fe4a-40f7-8649-56b4b64fe1f5-us-east1.apps.astra.datastax.com",
-    collection_name="tourism2",
+    collection_name="tourism3",
     embedding_dimension=1024,
 )
 
-service_context = ServiceContext.from_defaults(llm=OpenAI(model="gpt-3.5-turbo-1106", temperature=0.6, system_prompt=system_prompt), 
+#AstraDB(str(astra_api_key), "https://9cebec1d-fe4a-40f7-8649-56b4b64fe1f5-us-east1.apps.astra.datastax.com").delete_collection(collection_name="tourism")
+
+
+service_context = ServiceContext.from_defaults(llm=OpenAI(model="gpt-3.5-turbo-1106", temperature=0.6, system_prompt=system_prompt),
                                                embed_model=LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', model_kwargs = {'device': 'cuda:0'})))    
-                                                #OptimumEmbedding(folder_name="./bge_onnx")
-                                                #LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', model_kwargs = {'device': 'cuda:0'}))
-                                                #LangchainEmbedding(FastEmbedEmbeddings(model_name="intfloat/multilingual-e5-large", threads=15))
-                                                #LangchainEmbedding(CohereEmbeddings(client=co, async_client=co, model='embed-multilingual-light-v3.0'))
-                                                #LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large'))
-                                                #LangchainEmbedding(VoyageEmbeddings(model='voyage-lite-01', show_progress_bar=True))
-                                                #FastEmbedEmbedding(model_name="intfloat/multilingual-e5-large")
-                                                #LangchainEmbedding(HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L6-v2'))) #.to('cuda'))
 
 storage_context = StorageContext.from_defaults(vector_store=astra_db_store)
 
@@ -59,7 +54,7 @@ if "y"==input("Do you want to recompute the index? (y/n)"):
         df = pd.read_csv(file, dtype=str, parse_dates=True)
 
         # Convert the DataFrame into a list of Document objects
-        docs = [Document(doc_id=str(i), text=row.to_string()) for i, row in df.iterrows()]
+        docs = [Document(doc_id=str(i), text=row.to_string(), metadata={'url': row['event']}) for i, row in df.iterrows()]
 
         # Add the documents to the list
         documents.extend(docs)
@@ -74,6 +69,11 @@ while True:
     question = input("Please enter your question: ")
     if question == "exit":
             break
-    print(index.as_query_engine(verbose=True).query(question))
+    # Use the memory object to query the index
+    response = index.as_query_engine().query(question).response
+
+    # Print the response
+    print(response)
+
 
 print("Goodbye!")
