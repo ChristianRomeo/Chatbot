@@ -4,3 +4,4 @@ oldData/*
 install-pyenv-win.ps1
 .python-version
 .gitattributes
+mistral-7b-openorca.Q4_0.gguf

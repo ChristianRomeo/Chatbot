@@ -1,165 +1,181 @@
+import glob
+from llama_index import VectorStoreIndex, ServiceContext, Document, StorageContext, set_global_service_context
+from langchain.embeddings.huggingface import HuggingFaceEmbeddings
+from llama_index.embeddings import LangchainEmbedding
+import chromadb
+from llama_index.vector_stores import ChromaVectorStore
+from llama_index.storage.storage_context import StorageContext
+import pandas as pd
 import os
-import time
-import huggingface_hub
-import openai
-import pinecone
-from langchain.embeddings.openai import OpenAIEmbeddings
-from datasets import load_dataset
-from transformers import GPT2TokenizerFast
-from langchain.text_splitter import CharacterTextSplitter
-#from optimum.nvidia import LlamaForCausalLM
-import g4f
-from langchain_g4f import G4FLLM
+import numpy as np
+from llama_index.node_parser import SentenceSplitter
+from llama_index.indices.prompt_helper import PromptHelper
+from langchain_community.chat_models import ChatOpenAI
+from langchain.chains import ConversationChain
+from llama_index.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from langchain.chains.conversation.memory import ConversationSummaryBufferMemory, ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+from langchain.chains.question_answering import load_qa_chain
+from langchain_core.retrievers import BaseRetriever
+from langchain_core.vectorstores import VectorStoreRetriever
+from summarizer.sbert import SBertSummarizer
+from sentence_transformers import SentenceTransformer
+from langchain.agents import initialize_agent
+from llama_index.langchain_helpers.memory_wrapper import GPTIndexChatMemory
+from langchain_openai import OpenAIEmbeddings
+from langchain.memory import ConversationSummaryBufferMemory
+from langchain_community.llms import OpenAI
+from langchain.chains import ConversationChain
+import chromadb.utils.embedding_functions as embedding_functions
+import ray
+import re
+import torch
 from llama_index.llms import HuggingFaceLLM
-from g4f import Provider, models
+from transformers import pipeline
+from langchain_community.llms import GPT4All, GooglePalm
+from langchain_google_genai import GoogleGenerativeAI
+from gpt4all import Embed4All
+from llama_index.llms import ChatMessage, MessageRole
+from llama_index.chat_engine import CondenseQuestionChatEngine, CondensePlusContextChatEngine
+from llama_index.indices.vector_store.retrievers import VectorIndexRetriever, VectorIndexAutoRetriever
+from langchain_community.llms import Cohere
+from langchain_community.chat_models import ChatCohere
+import cohere
 
-PINECONE_KEY = os.environ.get('PINECONE_KEY')
-if PINECONE_KEY is None:
-    raise ValueError("Pinecone key not found. Please set the PINECONE_KEY environment variable.")
-OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-if OPENAI_API_KEY is None:
-    raise ValueError("OpenAI key not found. Please set the OPENAI_API_KEY environment variable.")
-HUGGINGFACE_API_KEY = os.environ.get('HUGGINGFACE_API_KEY')
-if HUGGINGFACE_API_KEY is None:
-    raise ValueError("Hugging Face key not found. Please set the HUGGINGFACE_API_KEY environment variable.")
-
-response = g4f.ChatCompletion.create(
-    model=g4f.models.gpt_4,
-    messages=[{"role": "user", "content": "what is the weather in nice?"}],
-)
-print(response)
-
-#remove from the response the first 100 characted but only the first time
-
-
-def chunker(seq, batch_size):
-    return (seq[pos:pos + batch_size] for pos in range(0, len(seq), batch_size))
-
-def query_pinecone(question, top_k=5):
-       # Generate the embedding for the question
-       question_embedding = OpenAIEmbeddings().embed_query(question)
-
-       # Query the Pinecone index with the question embedding to retrieve the top_k closest matches
-       query_results = index.query(
-           vector=question_embedding, 
-           top_k=top_k, 
-           include_metadata=True
-       )
-
-       # Extract the text metadata from the query results
-       return [item['metadata']['text'] for item in query_results['matches']]
-
-def generate_response(context, question):
-    # Format the context and question into a prompt for the language model
-    prompt = "\n".join([" ".join(sub_list) for sub_list in context]) + "\n\n" + question
-
-    # Generate the response using OpenAI GPT-3.5 Turbo
-    chat_completion = openai.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt,}
-        ],
-        model="gpt-3.5-turbo",
-    )
-    # Return the content of the chat completion, which is the model's response, stripped of leading/trailing whitespace
-    if chat_completion.choices[0].message.content:
-        return chat_completion.choices[0].message.content.strip()
-    else:
-         return "I'm sorry, I couldn't generate a response."
-
-
-index_name = "chatbot"
-model_name = 'text-embedding-ada-002'
 system_prompt = (
-    "This is a knowledgeable Tourism Assistant designed to provide visitors with "
+    "You are a knowledgeable Tourism Assistant designed to provide visitors with "
     "information, recommendations, and tips for exploring and enjoying their destination. "
     "The assistant is familiar with a wide range of topics including historical sites, "
     "cultural events, local cuisine, accommodations, transportation options, and hidden gems. "
     "It offers up-to-date and personalized information to help tourists make the most of their trip."
 )
 
-pinecone.init(api_key=PINECONE_KEY, environment="gcp-starter")
-pinecone.delete_index(index_name)
 
-if index_name not in pinecone.list_indexes():
-    # we create a new index
-    pinecone.create_index(
-        name=index_name,
-        metric='cosine',
-        dimension=1536,  # 1536 dim of text-embedding-ada-002
-        #metadata_config={'indexed': ['wiki-id', 'title']}
-    )
-# wait for index to be initialized
-#while not pinecone.describe_index(index_name).status['ready']: # type: ignore
-    time.sleep(1)
+llm = GPT4All(model="./mistral-7b-openorca.Q4_0.gguf", device='nvidia', n_threads=12, use_mlock=True, n_predict= 2000, temp=0.9)
+#GPT4All(model="./mistral-7b-openorca.Q4_0.gguf", device='nvidia', n_threads=12, use_mlock=True, n_predict= 2000, temp=1) 
+#ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.6)
+#GoogleGenerativeAI(model="gemini-pro")
 
-#tokenizer = AutoTokenizer.from_pretrained("text-embedding-ada-002", padding_side="left")
-#model = LlamaForCausalLM.from_pretrained("text-embedding-ada-002", use_fp8=True)
-#model_inputs = tokenizer(flattened_texts, return_tensors="pt").to("cuda")
-#embed = model.generate(**model_inputs, top_k=40, top_p=0.7, repetition_penalty=10)
+service_context = ServiceContext.from_defaults(llm= llm,
+                                                #prompt_helper=PromptHelper(),
+                                                embed_model=LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large',
+                                                                                                      model_kwargs={'device': 'cuda:0'})),
+                                                node_parser=SentenceSplitter(),
+                                                system_prompt=system_prompt,
+                                                #chunk_size_limit=4096,
+                                                #query_wrapper_prompt=query_wrapper_prompt
+                                                )
 
+set_global_service_context(service_context)
 
-# Load a small test dataset from Hugging Face Hub
-dataset = load_dataset("jayantdocplix/falcon-small-test-dataset")
+db = chromadb.PersistentClient(path="./chroma_db")
 
-# Convert the 'train' split of the dataset to a pandas DataFrame and take the first 50 rows
-df = dataset['train'].to_pandas().head(50) # type: ignore
+# create collection
+chroma_collection = db.get_or_create_collection("tourism_events_fr")
 
-# Initialize a character-based text splitter
-text_splitter = CharacterTextSplitter.from_huggingface_tokenizer(GPT2TokenizerFast.from_pretrained("gpt2-xl"), chunk_overlap=50)
-#overlap: how many characters will be duplicated at the end of one chunk and the start of the next chunk. 
-#           Helpful because it can prevent the model from missing or misinterpreting the context that might occur at the boundaries of chunks
+# assign chroma as the vector_store to the context
+storage_context = StorageContext.from_defaults(vector_store=ChromaVectorStore(chroma_collection=chroma_collection))
 
-# Apply the text splitter to each row of text in the DataFrame
-df['text'] = df['text'].apply(text_splitter.split_text)
+'''documents = []
 
-# Flatten the list of lists of text chunks into a single list
-flattened_texts = [text for sublist in df['text'].tolist() for text in sublist]
+ray.init()
+# Get a list of all CSV files in the directory
+for file in glob.glob('./data/*.csv'):
+    # Read the CSV file into a DataFrame
+    df = pd.read_csv(file, dtype=str, parse_dates=True)
 
-# Embed the flattened texts using OpenAI embeddings
-embed = OpenAIEmbeddings().embed_documents(flattened_texts)
+    # Convert the DataFrame into a list of Document objects
+    docs = [Document(doc_id=str(i), text=row.to_string(), extra_info={"url": row['url']}) for i, row in df.iterrows()] #str(row.to_dict())
 
-index = pinecone.GRPCIndex(index_name)
-time.sleep(1)
+    # Add the documents to the list
+    documents.extend(docs)
 
-items_to_upsert = [
-   {
-    # Each item to upsert contains a unique ID, the embedding values, and associated metadata
-       "id": str(index),
-       "values": embedding,
-       "metadata": {"text": text}
-   }
-   for index, (embedding, text) in enumerate(zip(embed, df['text'].tolist()))
-]
+batch_size = 5461  # Maximum batch size
+for i in range(0, len(documents), batch_size):
+    batch = documents[i:i+batch_size]
+    # Now add the batch to the index
+    index = VectorStoreIndex.from_documents(batch, service_context=service_context, storage_context=storage_context, show_progress=True)
+    #index = VectorStoreIndex.from_vector_store(ChromaVectorStore(chroma_collection=chroma_collection), storage_context=storage_context).refresh(batch)
+    #storage_context.persist(persist_dir=f"./chroma_db")
+storage_context.persist(persist_dir=f"./chroma_db")'''
 
-#index.upsert(items_to_upsert, async_req=True)
-# Chunk the items to upsert
-chunks = list(chunker(items_to_upsert, batch_size=100))
+index = VectorStoreIndex.from_vector_store(ChromaVectorStore(chroma_collection=chroma_collection), storage_context=storage_context, service_context=service_context)
 
-# Upsert the chunks asynchronously
-async_results = [index.upsert(vectors=chunk, async_req=True) for chunk in chunks]
+context_prompt= "Base the reply to the user question mainly on the Description field of the context "
 
-# Wait for the operations to complete and retrieve the responses
-[async_result.result() for async_result in async_results] # type: ignore
+chatEngine = CondensePlusContextChatEngine.from_defaults(
+    retriever=VectorIndexRetriever(index, similarity_top_k=1), #index.as_retriever(service_context=service_context, search_kwargs={"k": 1}),
+    query_engine=index.as_query_engine(service_context=service_context, retriever=VectorIndexRetriever(index, similarity_top_k=1)),
+    service_context=service_context,
+    system_prompt=system_prompt,
+    verbose=True,
+)
 
 while True:
-    # Read a line of input from the user
     question = input("Please enter your question: ")
-    if question == "exit":
-            break
-    # Query Pinecone
-    context = query_pinecone(question)
+    if question.lower() == "exit":
+        break
+    elif question.lower() == "reset":
+        chatEngine.reset()
+        print("The conversation has been reset.")
+        continue
+    else:
+        response = chatEngine.chat(question)
+       #index.as_chat_engine(chat_mode="condense_plus_context", similarity_top_k=1, service_context=service_context,memory=ConversationBufferMemory()).chat(question)
+        print(response)
+        print("##")
+        matches = re.findall(r"(?<=AI: ).*|(?<=AI Assistant: ).*|(?<=assistant: ).*", str(response), flags=re.DOTALL)
+        print(' '.join([match for match in matches if match != '']))
+        print("###")
+        filtered_text = re.sub(r"^user: .*$", "", str(response), flags=re.MULTILINE)
+        print(re.sub(r"(AI: |AI Assistant: |assistant: )", "", filtered_text))
+        
 
-    # Generate a response
-    response = generate_response(context, question)
+print("Goodbye!")
 
-    # Print the response
-    print(response)
+'''# Conversation loop with conversation history
+#conversation_memory = []
 
+memory = ConversationSummaryBufferMemory(llm=llm)
 
-print("Complete")
+# Conversation loop
+while True:
+    question = input("Please enter your question: ")
+    if question.lower() == "exit":
+        break
+    elif question.lower() == "reset":
+        #conversation_memory = []  # Clear the conversation history
+        memory.clear()
+        print("The conversation has been reset.")
+        continue
+    else:
+        #summary = SBertSummarizer(model="dangvantuan/sentence-camembert-large").model(conversation_memory)
 
-# questions to evaluate
-# 1. What is the best time to visit Paris?
-#LLAMAINDEX for alternatives for report in case
-# data processing
+        #print(summary)
+        
+        #full_text = "Given this chat history: " + str(summary) + "\nReply to the following question: " + question
+        
+        
+        full_text = "Given this chat history: " + memory.load_memory_variables({})['history'] + "\nReply to the following question: " + question
+        
+        #print("full text: ", full_text)
+        
+        #reply =  index.as_retriever(service_context=service_context).retrieve(full_text)
+        
+        #reply = index.as_query_engine(service_context=service_context, verbose=True, memory=memory).query(full_text)
+        
+        reply = index.as_chat_engine(chat_mode= "condense_question").chat_repl()
+        
+        print(reply)
+        
+        memory.save_context({"input": question}, {"output": str(reply)})
+        
+        #print(memory)
+        
+        print("memory: ", memory.load_memory_variables({})['history'])
+        
+        # Update conversation memory with the new output
+        #conversation_memory.append(full_text + "New reply: " + str(reply))
+
+    #print(index.as_query_engine(verbose=True, similarity_top_k=6, memory=memory).query(question))'''

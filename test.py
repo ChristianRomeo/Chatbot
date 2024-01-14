@@ -70,7 +70,7 @@ while True:
     if question == "exit":
             break
     # Use the memory object to query the index
-    response = index.as_query_engine().query(question).response
+    response = index.as_query_engine().query(question).response # type: ignore
 
     # Print the response
     print(response)
