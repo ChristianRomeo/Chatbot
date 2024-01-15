@@ -123,11 +123,8 @@ while True:
     else:
         response = chatEngine.chat(question)
        #index.as_chat_engine(chat_mode="condense_plus_context", similarity_top_k=1, service_context=service_context,memory=ConversationBufferMemory()).chat(question)
-        print(response)
-        print("##")
-        matches = re.findall(r"(?<=AI: ).*|(?<=AI Assistant: ).*|(?<=assistant: ).*", str(response), flags=re.DOTALL)
-        print(' '.join([match for match in matches if match != '']))
-        print("###")
+        #print(response)
+        
         filtered_text = re.sub(r"^user: .*$", "", str(response), flags=re.MULTILINE)
         print(re.sub(r"(AI: |AI Assistant: |assistant: )", "", filtered_text))
         
