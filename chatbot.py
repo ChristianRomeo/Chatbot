@@ -10,7 +10,7 @@ import os
 import numpy as np
 from llama_index.node_parser import SentenceSplitter
 from llama_index.indices.prompt_helper import PromptHelper
-from langchain_community.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationChain
 from llama_index.prompts import PromptTemplate
 from langchain.chains import LLMChain
@@ -52,7 +52,7 @@ system_prompt = (
 )
 
 
-llm = GPT4All(model="./mistral-7b-openorca.Q4_0.gguf", device='nvidia', n_threads=12, use_mlock=True, n_predict= 2000, temp=0.9)
+llm = ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.6)
 #GPT4All(model="./mistral-7b-openorca.Q4_0.gguf", device='nvidia', n_threads=12, use_mlock=True, n_predict= 2000, temp=1) 
 #ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.6)
 #GoogleGenerativeAI(model="gemini-pro")
@@ -72,7 +72,7 @@ set_global_service_context(service_context)
 db = chromadb.PersistentClient(path="./chroma_db")
 
 # create collection
-chroma_collection = db.get_or_create_collection("tourism_events_fr")
+chroma_collection = db.get_or_create_collection("tourism_db")
 
 # assign chroma as the vector_store to the context
 storage_context = StorageContext.from_defaults(vector_store=ChromaVectorStore(chroma_collection=chroma_collection))
@@ -105,11 +105,11 @@ index = VectorStoreIndex.from_vector_store(ChromaVectorStore(chroma_collection=c
 context_prompt= "Base the reply to the user question mainly on the Description field of the context "
 
 chatEngine = CondensePlusContextChatEngine.from_defaults(
-    retriever=VectorIndexRetriever(index, similarity_top_k=1), #index.as_retriever(service_context=service_context, search_kwargs={"k": 1}),
-    query_engine=index.as_query_engine(service_context=service_context, retriever=VectorIndexRetriever(index, similarity_top_k=1)),
+    retriever=VectorIndexRetriever(index, similarity_top_k=5), #index.as_retriever(service_context=service_context, search_kwargs={"k": 1}),
+    query_engine=index.as_query_engine(service_context=service_context, retriever=VectorIndexRetriever(index, similarity_top_k=5)),
     service_context=service_context,
     system_prompt=system_prompt,
-    verbose=True,
+    #verbose=True,
 )
 
 while True:
@@ -122,7 +122,7 @@ while True:
         continue
     else:
         response = chatEngine.chat(question)
-       #index.as_chat_engine(chat_mode="condense_plus_context", similarity_top_k=1, service_context=service_context,memory=ConversationBufferMemory()).chat(question)
+        #index.as_chat_engine(chat_mode="condense_plus_context", similarity_top_k=1, service_context=service_context,memory=ConversationBufferMemory()).chat(question)
         #print(response)
         
         filtered_text = re.sub(r"^user: .*$", "", str(response), flags=re.MULTILINE)
