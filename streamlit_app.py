@@ -28,11 +28,12 @@ if "init" not in st.session_state:
 
 
     st.session_state.service_context = ServiceContext.from_defaults(llm=ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.9), 
-                                                prompt_helper = PromptHelper(),
-                                                embed_model= LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', model_kwargs = {'device': 'cuda:0'})),
-                                                node_parser=SentenceSplitter(),
-                                                system_prompt=system_prompt,
-                                                )
+                                                                    prompt_helper = PromptHelper(),
+                                                                    embed_model= LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', 
+                                                                                                                          model_kwargs = {'device': 'cuda:0'})),
+                                                                    node_parser=SentenceSplitter(),
+                                                                    system_prompt=system_prompt,
+                                                                    )
 
     set_global_service_context(st.session_state.service_context)
 
@@ -42,7 +43,8 @@ if "init" not in st.session_state:
     # assign chroma as the vector_store to the context
     st.session_state.storage_context = StorageContext.from_defaults(vector_store=ChromaVectorStore(chroma_collection=st.session_state.chroma_collection))
 
-    st.session_state.index = VectorStoreIndex.from_vector_store(ChromaVectorStore(chroma_collection=st.session_state.chroma_collection), storage_context=st.session_state.storage_context, service_context=st.session_state.service_context)
+    st.session_state.index = VectorStoreIndex.from_vector_store(ChromaVectorStore(chroma_collection=st.session_state.chroma_collection), 
+                                                                storage_context=st.session_state.storage_context, service_context=st.session_state.service_context)
 
     #context_prompt= "Base the reply to the user question mainly on the Description field of the context "
     #condense_prompt = " "
@@ -53,12 +55,13 @@ if "init" not in st.session_state:
     
     st.session_state.chat_engine = CondensePlusContextChatEngine.from_defaults(
                                                                                 retriever=st.session_state.retriever, 
-                                                                                query_engine=st.session_state.index.as_query_engine(service_context=st.session_state.service_context, retriever=st.session_state.retriever ),
+                                                                                query_engine=st.session_state.index.as_query_engine(service_context=st.session_state.service_context, 
+                                                                                                                                    retriever=st.session_state.retriever ),
                                                                                 service_context=st.session_state.service_context,
                                                                                 system_prompt=system_prompt,
                                                                                 #condense_prompt=DEFAULT_CONDENSE_PROMPT_TEMPLATE,
                                                                                 #context_prompt=DEFAULT_CONTEXT_PROMPT_TEMPLATE,
-                                                                                verbose=True,
+                                                                                #verbose=True,
                                                                             )
         
     st.session_state.messages = []
@@ -71,17 +74,15 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 def handle_chat(question):
-    # Your existing handle_chat function with modifications to use session_state
     if question.lower() == "reset":
         st.session_state.chat_engine.reset()
-        st.session_state.messages = []  # Reset the messages in session state
+        st.session_state.messages = []
         return "The conversation has been reset."
     else:
         response = st.session_state.chat_engine.chat(question)
         cleaned_response = re.sub(r"(AI: |AI Assistant: |assistant: )", "", re.sub(r"^user: .*$", "", str(response), flags=re.MULTILINE))
         return cleaned_response
 
-# Accept user input
 user_input = st.chat_input("Please enter your question:")
 if user_input:
     if user_input.lower() == "exit":
