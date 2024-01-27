@@ -3,5 +3,6 @@ openai
 langchain
 transformers
 llama-index
-astrapy
 sentence-transformers
+chromadb
+langchain_openai

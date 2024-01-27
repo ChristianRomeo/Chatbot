@@ -29,8 +29,7 @@ if "init" not in st.session_state:
 
     st.session_state.service_context = ServiceContext.from_defaults(llm=ChatOpenAI(model="gpt-3.5-turbo-1106", temperature=0.9), 
                                                                     prompt_helper = PromptHelper(),
-                                                                    embed_model= LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', 
-                                                                                                                          model_kwargs = {'device': 'cuda:0'})),
+                                                                    embed_model= LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large')),
                                                                     node_parser=SentenceSplitter(),
                                                                     system_prompt=system_prompt,
                                                                     )

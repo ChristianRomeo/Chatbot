@@ -6,3 +6,4 @@ install-pyenv-win.ps1
 .gitattributes
 mistral-7b-openorca.Q4_0.gguf
 .vs/*
+copua/*
