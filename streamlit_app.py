@@ -1,4 +1,5 @@
 # Import the necessary libraries
+from llama_index.llms import OpenAI
 import streamlit as st
 from llama_index import VectorStoreIndex, ServiceContext, StorageContext, set_global_service_context
 from langchain.embeddings.huggingface import HuggingFaceEmbeddings
@@ -12,6 +13,7 @@ import re
 from llama_index.chat_engine import CondensePlusContextChatEngine
 from llama_index.indices.vector_store.retrievers import VectorIndexRetriever
 from langchain_openai import ChatOpenAI
+from llama_index.postprocessor import RankGPTRerank
 
 # Streamlit interface
 st.title('🦜🔗 Tourism Assistant Chatbot')
@@ -95,17 +97,28 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
 
     #index.as_retriever(service_context=service_context, search_kwargs={"k": 1})
 
-    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=5) 
+    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=9) 
+    
+    reranker = RankGPTRerank(
+            llm=OpenAI(
+                model="gpt-3.5-turbo",
+                temperature=0.0),
+            top_n=3,
+            verbose=True,
+        )
+    
+    #reranker = LLMRerank(choice_batch_size=6, top_n=3, service_context=st.session_state.service_context)
     
     st.session_state.chat_engine = CondensePlusContextChatEngine.from_defaults(
                                                                                 retriever=st.session_state.retriever, 
                                                                                 query_engine=st.session_state.index.as_query_engine(service_context=st.session_state.service_context, 
-                                                                                                                                    retriever=st.session_state.retriever ),
+                                                                                                                                    retriever=st.session_state.retriever),
                                                                                 service_context=st.session_state.service_context,
                                                                                 system_prompt=system_prompt,
+                                                                                node_postprocessors=[reranker],
                                                                                 #condense_prompt=DEFAULT_CONDENSE_PROMPT_TEMPLATE,
                                                                                 #context_prompt=DEFAULT_CONTEXT_PROMPT_TEMPLATE,
-                                                                                #verbose=True,
+                                                                                verbose=True,
                                                                             )
         
     st.session_state.messages = []
