@@ -1,4 +1,6 @@
 # Import the necessary libraries
+import random
+import time
 from llama_index.llms import OpenAI
 import streamlit as st
 from llama_index import VectorStoreIndex, ServiceContext, StorageContext, set_global_service_context
@@ -24,6 +26,7 @@ if "init" not in st.session_state:
 '''
 #### Task Instructions:
 You are a friendly and knowledgeable tourism assistant, helping users with their queries related to tourism, travel, dining, events, and any related questions. Your goal is to provide accurate and useful information. If there's information you don't know, respond truthfully. Add a touch of personality and humor to engage users. 
+End your responses asking to the user if there's anything else you can help with, everytime.
 
 #### Personalization & Tone:
 Maintain an upbeat and helpful tone, embodying the role of a helpful travel assistant. Inject personality and humor into responses to make interactions more enjoyable.
@@ -97,13 +100,13 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
 
     #index.as_retriever(service_context=service_context, search_kwargs={"k": 1})
 
-    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=9) 
+    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=8) 
     
     reranker = RankGPTRerank(
             llm=OpenAI(
                 model="gpt-3.5-turbo",
                 temperature=0.0),
-            top_n=3,
+            top_n=4,
             verbose=True,
         )
     
@@ -122,7 +125,31 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
                                                                             )
         
     st.session_state.messages = []
+    
+    assistant_response = random.choice(
+            [
+                "Hello there! How can I assist you today?",
+                
+                "Good day human! I'm here to answer questions about travel. What do you need help with?",
+                
+                "Hello! My name is Minotour2.0. Please feel free to ask me any questions about trips, destinations or planning.",
 
+                "Welcome! I'm an AI assistant focused on travel. How may I assist you in finding your next adventure?",
+
+                "Greetings! What are your travel plans or questions? I'm happy to provide any information I can.",
+
+                "Hi there, traveler! I'm your virtual travel guide - where would you like to go or what do you need help planning?",
+
+                "What brings you here today? I'm your assistant for all things related to getting away - what destination interests you?",
+
+                "Salutations! Let me know if you need advice on flights, hotels or activities for an upcoming journey.",
+
+                "Hello friend, I'm here to help with travel queries. What questions can I answer for you?",
+
+                "Welcome, I'm your assistant available to help with transportation, lodging or other travel logistics. How can I assist you?",
+            ]
+        )
+    st.session_state.messages.append({"role": "assistant", "content": assistant_response})
 
 
 # Display chat messages from history on app rerun
@@ -139,17 +166,30 @@ def handle_chat(question):
         response = st.session_state.chat_engine.chat(question)
         cleaned_response = re.sub(r"(AI: |AI Assistant: |assistant: )", "", re.sub(r"^user: .*$", "", str(response), flags=re.MULTILINE))
         return cleaned_response
-
-user_input = st.chat_input("Please enter your question:")
-if user_input:
+    
+if user_input:= st.chat_input("Please enter your question:"):
     if user_input.lower() == "exit":
+        st.warning('Goodbye')
         st.stop()
     else:
+        with st.chat_message("user"):
+            st.markdown(user_input)
+            
         # Add user message to chat history
-        st.session_state.messages.append({"role": "user", "content": user_input})
+        st.session_state.messages.append({"role": "user", "content": user_input})   
+                 
         # Handle chat and get the response
         response = handle_chat(user_input)
+        
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            full_response = ""
+            message_placeholder = st.empty()
+            for chunk in response.split():
+                full_response += chunk + " "
+                time.sleep(0.05)
+                # Add a blinking cursor to simulate typing
+                message_placeholder.markdown(full_response + "▌")
+            message_placeholder.markdown(full_response)
         # Add assistant response to chat history
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        # Update the chat messages displayed
-        st.rerun()
+        st.session_state.messages.append({"role": "assistant", "content": full_response})
