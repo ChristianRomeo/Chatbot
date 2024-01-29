@@ -21,7 +21,7 @@ Before you can use the TurismChatbot, you need to clone the repository and insta
 
 ```bash
 git clone https://github.com/ChristianRomeo/Chatbot.git
-cd TurismChatbot
+cd Chatbot
 ```
 
 ## Usage
@@ -29,7 +29,7 @@ cd TurismChatbot
 To start the chatbot, run the following command:
 
 ```bash
-python chatbot.py
+streamlit run .\streamlit_app.py
 ```
 
 The chatbot will start and you can begin interacting with it.
