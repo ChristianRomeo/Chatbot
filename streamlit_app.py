@@ -100,7 +100,7 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
 
     #index.as_retriever(service_context=service_context, search_kwargs={"k": 1})
 
-    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=8) 
+    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=10) 
     
     reranker = RankGPTRerank(
             llm=OpenAI(
