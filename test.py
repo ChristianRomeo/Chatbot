@@ -40,7 +40,8 @@ astra_db_store = AstraDBVectorStore(
 
 
 service_context = ServiceContext.from_defaults(llm=OpenAI(model="gpt-3.5-turbo-1106", temperature=0.6, system_prompt=system_prompt),
-                                               embed_model=LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', model_kwargs = {'device': 'cuda:0'})))    
+                                               embed_model=LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large', 
+                                                                                                    model_kwargs = {'device': 'cuda:0'})))    
 
 storage_context = StorageContext.from_defaults(vector_store=astra_db_store)
 
@@ -70,7 +71,7 @@ while True:
     if question == "exit":
             break
     # Use the memory object to query the index
-    response = index.as_query_engine().query(question).response # type: ignore
+    response = index.as_query_engine().query(question).response
 
     # Print the response
     print(response)

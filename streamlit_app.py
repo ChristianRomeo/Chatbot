@@ -20,6 +20,7 @@ from llama_index.postprocessor import RankGPTRerank
 # Streamlit interface
 st.title('🦜🔗 Tourism Assistant Chatbot')
 
+#First run, initialize the context and the chat engine
 if "init" not in st.session_state:
     st.session_state.init = True
     system_prompt = (
@@ -76,10 +77,10 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
 > "Ah, numbers are a bit outside my travel-savvy brain! 😅 If you have any questions about amazing destinations or travel tips, though, I'm all ears!"    
     ''')
 
-
+    #temperature adjustable at will
     st.session_state.service_context = ServiceContext.from_defaults(llm=ChatOpenAI(model="gpt-3.5-turbo", temperature=0.9), 
                                                                     prompt_helper = PromptHelper(),
-                                                                    embed_model= LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large')),
+                                                                    embed_model= LangchainEmbedding(HuggingFaceEmbeddings(model_name='dangvantuan/sentence-camembert-large')), #in case of new embeddings, possibility to add "model_kwargs = {'device': 'cuda:0'}" to the HuggingFaceEmbeddings call to use GPU
                                                                     node_parser=SentenceSplitter(),
                                                                     system_prompt=system_prompt,
                                                                     )
@@ -92,16 +93,17 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
     # assign chroma as the vector_store to the context
     st.session_state.storage_context = StorageContext.from_defaults(vector_store=ChromaVectorStore(chroma_collection=st.session_state.chroma_collection))
 
+    #get the index
     st.session_state.index = VectorStoreIndex.from_vector_store(ChromaVectorStore(chroma_collection=st.session_state.chroma_collection), 
                                                                 storage_context=st.session_state.storage_context, service_context=st.session_state.service_context)
 
+    #example of context and condense prompt adjustability
     #context_prompt= "Base the reply to the user question mainly on the Description field of the context "
     #condense_prompt = " "
 
-    #index.as_retriever(service_context=service_context, search_kwargs={"k": 1})
-
-    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=10) 
+    st.session_state.retriever=VectorIndexRetriever(st.session_state.index, similarity_top_k=10) #or index.as_retriever(service_context=service_context, search_kwargs={"k": 10})
     
+    #I chose to use the RankGPTRerank postprocessor to rerank the top 4 results from the retriever over other rerankers like LLMRerank that wasn't working as expected
     reranker = RankGPTRerank(
             llm=OpenAI(
                 model="gpt-3.5-turbo",
@@ -109,8 +111,6 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
             top_n=4,
             verbose=True,
         )
-    
-    #reranker = LLMRerank(choice_batch_size=6, top_n=3, service_context=st.session_state.service_context)
     
     st.session_state.chat_engine = CondensePlusContextChatEngine.from_defaults(
                                                                                 retriever=st.session_state.retriever, 
@@ -123,9 +123,11 @@ Maintain a commitment to accuracy. If there's uncertainty in information, it's b
                                                                                 #context_prompt=DEFAULT_CONTEXT_PROMPT_TEMPLATE,
                                                                                 verbose=True,
                                                                             )
-        
+    
+    #initialize the chat history
     st.session_state.messages = []
     
+    #initialize the assistant with a random greeting
     assistant_response = random.choice(
             [
                 "Hello there! How can I assist you today?",
